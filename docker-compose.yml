@@ -1,0 +1,77 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    networks:
+      - nxnestboilerplate
+    restart: unless-stopped
+    ports:
+      - '5434:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: yourdatabase
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    networks:
+      - nxnestboilerplate
+    container_name: redis
+    ports:
+      - '6379:6379'
+
+  api:
+    networks:
+      - nxnestboilerplate
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.local
+    image: nxnestboilerplate:latest
+    command: sh -c "npx prisma generate
+      && npx prisma migrate deploy
+      && pnpm start api"
+    volumes:
+      - ./apps/api:/app/apps/api
+      - ./libs:/app/libs
+      - ./tsconfig.base.json:/app/tsconfig.base.json
+      - ./esbuild.config.js:/app/esbuild.config.js
+      - ./package.json:/app/package.json
+      - ./.env.example:/app/.env.example
+    ports:
+      - '3000:3000'
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/yourdatabase
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+
+  worker:
+    image: nxnestboilerplate:latest
+    networks:
+      - nxnestboilerplate
+    command: sh -c "pnpm start worker"
+    volumes:
+      - ./apps/worker:/app/apps/worker
+      - ./libs:/app/libs
+      - ./tsconfig.base.json:/app/tsconfig.base.json
+      - ./esbuild.config.js:/app/esbuild.config.js
+      - ./package.json:/app/package.json
+      - ./.env.example:/app/.env.example
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/yourdatabase
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+
+volumes:
+  pgdata:
+
+networks:
+  nxnestboilerplate:
+    driver: bridge
